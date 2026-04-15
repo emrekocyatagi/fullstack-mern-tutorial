@@ -12,7 +12,8 @@ const PORT = process.env.PORT || 5001 ;
 //middleware, It allows us to  get req.body as JSON object in our Routers. 
 // It parses incoming JSON request bodies and makes the data available in req.body. 
 // Without this middleware, req.body would be undefined for JSON requests.
-app.use(express.json()); //to parse JSON request bodies
+app.use(express.json()); //to parse JSON request bodies 
+// -- Internally, it calls next() when done parsing
 app.use(rateLimiter); // Apply the rate limiter middleware to all routes
 
 app.use((req, res, next) => {
