@@ -11,11 +11,11 @@ Read the parts in order — each builds on the previous one. After each part, an
 
 | Part | Topic | File |
 |---|---|---|
-| **01** | 🌐 HTTP & the Express Backend | [01_HTTP_and_Backend.md](./01_HTTP_and_Backend.md) |
-| **02** | 🗄️ MongoDB & Mongoose | [02_MongoDB_and_Mongoose.md](./02_MongoDB_and_Mongoose.md) |
-| **03** | ⚛️ React Frontend | [03_React_Frontend.md](./03_React_Frontend.md) |
-| **04** | 🔀 React Router | [04_React_Router.md](./04_React_Router.md) |
-| **05** | 🏗️ Full Architecture, Data Flow & Bugs | [05_Architecture_and_Bugs.md](./05_Architecture_and_Bugs.md) |
+| **01** | 🌐 HTTP & the Express Backend | [01_HTTP_and_Backend.md](../docs/01_HTTP_and_Backend.md) |
+| **02** | 🗄️ MongoDB & Mongoose | [02_MongoDB_and_Mongoose.md](../docs/02_MongoDB_and_Mongoose.md) |
+| **03** | ⚛️ React Frontend | [03_React_Frontend.md](../docs/03_React_Frontend.md) |
+| **04** | 🔀 React Router | [04_React_Router.md](../docs/04_React_Router.md) |
+| **05** | 🏗️ Full Architecture, Data Flow & Bugs | [05_Architecture_and_Bugs.md](../docs/05_Architecture_and_Bugs.md) |
 
 ---
 
