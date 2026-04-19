@@ -11,7 +11,7 @@ Read the parts in order — each builds on the previous one. After each part, an
 
 | Part | Topic | File |
 |---|---|---|
-| **01** | 🌐 HTTP & the Express Backend | [01_HTTP_and_Backend.md](/docs/01_HTTP_and_Backend.md) |
+| **01** | 🌐 HTTP & the Express Backend | [/docs/01_HTTP_and_Backend.md](/docs/01_HTTP_and_Backend.md) |
 | **02** | 🗄️ MongoDB & Mongoose | [02_MongoDB_and_Mongoose.md](/docs/02_MongoDB_and_Mongoose.md) |
 | **03** | ⚛️ React Frontend | [03_React_Frontend.md](/docs/03_React_Frontend.md) |
 | **04** | 🔀 React Router | [04_React_Router.md](/docs/04_React_Router.md) |
