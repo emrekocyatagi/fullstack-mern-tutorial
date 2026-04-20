@@ -8,29 +8,32 @@
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
-│  BROWSER (React / Vite — localhost:5173)                         │
+│  BROWSER (React / Vite — localhost:5173 in dev, / in prod)       │
 │                                                                  │
 │  main.jsx → <BrowserRouter> → <App> → <Routes>                  │
 │                                                                  │
 │  Pages:                                                          │
 │    /            → HomePage    (fetches & lists all notes)        │
 │    /create      → CreatePage  (form → POST new note)             │
-│    /notes/:id   → NoteDetailPage (stub — not yet implemented)    │
+│    /notes/:id   → NoteDetailPage (view + edit + delete)          │
 │                                                                  │
-│  Components: Navbar, NoteCard, RateLimitedUI                     │
-│  Lib: axios instance (baseURL: localhost:5001/api), formatDate   │
+│  Components: Navbar, NoteCard, NotesNotFound, RateLimitedUI      │
+│  Lib: axios (dev → localhost:5001/api, prod → /api), formatDate  │
 └──────────────────────┬───────────────────────────────────────────┘
                        │  HTTP (Axios)
-                       │  GET /api/notes
-                       │  POST /api/notes
-                       │  PUT /api/notes/:id
+                       │  GET    /api/notes
+                       │  GET    /api/notes/:id
+                       │  POST   /api/notes
+                       │  PUT    /api/notes/:id
                        │  DELETE /api/notes/:id
                        ▼
 ┌──────────────────────────────────────────────────────────────────┐
-│  EXPRESS SERVER (Node.js — localhost:5001)                       │
+│  EXPRESS SERVER (Node.js)                                        │
 │                                                                  │
 │  server.js                                                       │
-│    middleware: cors → express.json → rateLimiter → logger        │
+│    DEV:  cors({ origin: localhost:5173 })                        │
+│    PROD: serves React build as static files (express.static)     │
+│    middleware: express.json → rateLimiter → logger               │
 │    routes: app.use("/api/notes", notesRouter)                    │
 │                                                                  │
 │  notesRoutes.js                                                  │
@@ -40,7 +43,7 @@
 │    PUT  /:id    → updateNote                                      │
 │    DELETE /:id  → deleteNote                                      │
 │                                                                  │
-│  rateLimiter.js → upstash.js (Upstash Redis — cloud)            │
+│  rateLimiter.js → upstash.js (100 req / 60 s, sliding window)   │
 └──────────────────────┬───────────────────────────────────────────┘
                        │  Mongoose (ODM)
                        ▼
@@ -109,93 +112,63 @@ Here is every single step, from user action to database and back:
 
 ---
 
-## 5.3 Bugs Found in Your Code
+## 5.3 Bugs Found & Fixed
 
-I found **3 real bugs** while reading your code. Here they are with explanations and fixes:
+While analysing the initial code, I found **3 bugs**. All three were fixed in the subsequent commits.
 
 ---
 
-### 🐛 Bug 1: Route Mismatch — NoteCard links to wrong URL
+### ✅ Bug 1 (Fixed): Route Mismatch — NoteCard linked to wrong URL
 
-**File:** `frontend/src/components/NoteCard.jsx`, line 8
+**Commit:** `456d76a`  
+**File:** `frontend/src/components/NoteCard.jsx`
 
 ```jsx
-// BUGGY — links to /note/:id (singular)
+// BEFORE — linked to /note/:id (no route matched)
 <Link to={`/note/${note._id}`}>
 
-// But App.jsx defines the route as (plural):
-<Route path="/notes/:id" element={<NoteDetailPage />} />
-```
-
-**Effect:** Clicking any note card navigates to `/note/664abc...` which matches no route — React renders nothing (or a blank page).
-
-**Fix:**
-```jsx
-// NoteCard.jsx — change /note/ to /notes/
-<Link to={`/notes/${note._id}`}>
+// AFTER — matches App.jsx route /notes/:id
+// (NoteCard now links directly to the detail page, and the whole
+// card became a clickable link in the final implementation)
 ```
 
 ---
 
-### 🐛 Bug 2: `handleDelete` is called but never defined
+### ✅ Bug 2 (Fixed): `handleDelete` was undefined in NoteCard
 
-**File:** `frontend/src/components/NoteCard.jsx`, line 23
+**Commit:** `456d76a`  
+**File:** `frontend/src/components/NoteCard.jsx`
 
-```jsx
-// BUGGY — handleDelete doesn't exist
-onClick={(e) => handleDelete(e, note._id)}
-```
-
-**Effect:** Clicking the delete button throws `ReferenceError: handleDelete is not defined` and crashes the component.
-
-**Fix:** The delete logic should live in `HomePage` (which owns the `notes` state), and be passed down as a prop:
+The fix was to define `handleDelete` *inside* the component (with a confirmation dialog), and pass `setNotes` as a prop from `HomePage` so the component can update the list after deletion:
 
 ```jsx
-// In HomePage.jsx — add a delete handler
-const handleDeleteNote = async (id) => {
-  try {
-    await api.delete(`/notes/${id}`);
-    setNotes(notes.filter((n) => n._id !== id));  // remove from state
-    toast.success("Note deleted");
-  } catch {
-    toast.error("Failed to delete note");
-  }
-};
-
-// Pass it to NoteCard
-<NoteCard key={note._id} note={note} onDelete={handleDeleteNote} />
-
-// In NoteCard.jsx — receive and use the prop
-const NoteCard = ({ note, onDelete }) => {
-  const handleDelete = (e) => {
-    e.preventDefault();          // don't navigate (card is a Link)
-    e.stopPropagation();         // don't bubble to the Link click
-    onDelete(note._id);
+// NoteCard.jsx — final implementation
+const NoteCard = ({ note, setNotes }) => {
+  const handleDelete = async (e, id) => {
+    e.preventDefault();
+    if (!window.confirm("Are you sure you want to delete this note?")) return;
+    try {
+      await api.delete(`/notes/${id}`);
+      setNotes((prevNotes) => prevNotes.filter((note) => note._id !== id));
+      toast.success("Note deleted successfully");
+    } catch (err) {
+      toast.error("Failed to delete note");
+    }
   };
   // ...
 };
+
+// HomePage.jsx — passes setNotes down
+<NoteCard key={note._id} note={note} setNotes={setNotes} />
 ```
 
 ---
 
-### 🐛 Bug 3: Duplicate `onChange` handler in CreatePage
+### ✅ Bug 3 (Fixed): Duplicate `onChange` in CreatePage
 
-**File:** `frontend/src/pages/CreatePage.jsx`, lines 50 and 53
+**File:** `frontend/src/pages/CreatePage.jsx`
 
-```jsx
-// BUGGY — onChange appears twice on the same input
-<input
-  value={title}
-  onChange={(e) => setTitle(e.target.value)}   // line 50
-  className="input input-bordered"
-  placeholder="Enter note title"
-  onChange={(e) => setTitle(e.target.value)}   // line 53 — duplicate!
-/>
-```
-
-**Effect:** JSX only uses the *last* occurrence of a duplicate prop, so the first one is silently ignored. This is not a crash but it's dead code that suggests a copy-paste error.
-
-**Fix:** Remove one of the duplicate `onChange` handlers.
+The duplicate `onChange` handler on the title input was a copy-paste leftover. The redundant one was removed.
 
 ---
 
@@ -299,20 +272,21 @@ If you moved `app.use(express.json())` *after* the routes, every `req.body` in y
 
 Here are concrete improvements, ordered by difficulty:
 
-### Easy (fix existing code)
-- [ ] Fix the route mismatch: `/note/` → `/notes/` in NoteCard
-- [ ] Remove the duplicate `onChange` in CreatePage
-- [ ] Implement `handleDelete` in NoteCard (pass as a prop from HomePage)
+### ✅ Completed
+- [x] Fix the route mismatch: `/note/` → `/notes/` in NoteCard
+- [x] Remove the duplicate `onChange` in CreatePage
+- [x] Implement `handleDelete` in NoteCard (uses `setNotes` prop)
+- [x] Implement `NoteDetailPage` — `useParams` + `api.get` + edit form + `api.put`
+- [x] Add a "No notes yet" empty state (`NotesNotFound` component)
+- [x] Production environment — CORS conditional, static file serving from Express
+- [x] Smart Axios `baseURL` — dev vs prod via `import.meta.env.MODE`
+- [x] Root `package.json` with `build` + `start` scripts for Render
+- [x] Rate limiter tuned to 100 req / 60 s
+- [x] Deployed to Render — https://fullstack-mern-tutorial.onrender.com/
 
-### Medium (new features)
-- [ ] Implement `NoteDetailPage` — use `useParams`, fetch the note, display it
-- [ ] Add an edit form to `NoteDetailPage` — pre-fill with current values, submit a PUT request
-- [ ] Add a "No notes yet" empty state to `HomePage` when `notes.length === 0`
-- [ ] Add per-IP rate limiting instead of the shared `"my-limit-key"`
-
-### Advanced (production-ready)
-- [ ] Add user authentication (JWT) — register, login, protect routes
-- [ ] Add search/filter functionality to HomePage
-- [ ] Deploy: backend to Render/Railway, frontend to Vercel/Netlify
-- [ ] Add a proper 404 page with `<Route path="*" element={<NotFoundPage />} />`
-- [ ] Write tests with Vitest (frontend) and Jest/Supertest (backend)
+### ⬜ Still to explore
+- [ ] Per-user rate limiting (by IP address instead of shared key)
+- [ ] User authentication (JWT + bcrypt) — register, login, protect routes
+- [ ] Search / filter notes on the HomePage
+- [ ] A proper 404 page with `<Route path="*" element={<NotFoundPage />} />`
+- [ ] Unit & integration tests (Vitest + Supertest)

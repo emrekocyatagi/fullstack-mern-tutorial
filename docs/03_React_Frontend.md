@@ -242,15 +242,60 @@ While the API call is in-flight, `loading` is `true`. The button is disabled (pr
 
 ---
 
-### `NoteDetailPage.jsx` — Placeholder
+### `NoteDetailPage.jsx` — View, Edit & Delete a Note
 
 ```jsx
 const NoteDetailPage = () => {
-  return <div>NoteDetailPage</div>;
+  const [note, setNote] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const navigate = useNavigate();
+  const { id } = useParams();
+
+  useEffect(() => {
+    const fetchNote = async () => {
+      try {
+        const res = await api.get(`/notes/${id}`);
+        setNote(res.data);
+      } catch (err) {
+        toast.error("Failed to fetch note details");
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchNote();
+  }, [id]);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await api.put(`/notes/${id}`, note);
+      toast.success("Note updated successfully");
+      navigate("/");
+    } catch { toast.error("Failed to update note"); }
+    finally { setSaving(false); }
+  };
+
+  const handleDelete = async () => {
+    if (!window.confirm("Are you sure?")) return;
+    try {
+      await api.delete(`/notes/${id}`);
+      toast.success("Note deleted successfully");
+      navigate("/");
+    } catch { toast.error("Failed to delete note"); }
+  };
+  // ... renders edit form with title input, content textarea, Save + Delete buttons
 };
 ```
 
-**Status:** This page is a stub — it was scaffolded but not yet implemented. The route `/notes/:id` points to it, but it doesn't fetch or display note data yet. This is a great place to practice implementing on your own (see the "What to Learn Next" section).
+**Responsibility:** Fetch a single note by ID, display it in an editable form, and allow the user to save changes (PUT) or delete the note (DELETE) — both navigating back to home on success.
+
+**Key patterns used:**
+- `useParams()` — reads `:id` from the URL
+- `useEffect([id])` — re-fetches if the ID in the URL changes
+- Controlled inputs that update the `note` object in state: `onChange={(e) => setNote({ ...note, title: e.target.value })}`
+- The spread `{ ...note, title: e.target.value }` creates a new object (immutable update) rather than mutating state directly
+- Loading spinner shown while fetching (`<LoaderIcon className="animate-spin" />`)
 
 ---
 
@@ -289,45 +334,58 @@ const Navbar = () => {
 ### `NoteCard.jsx` — Individual Note Display
 
 ```jsx
-const NoteCard = ({ note }) => {
+const NoteCard = ({ note, setNotes }) => {
+  const handleDelete = async (e, id) => {
+    e.preventDefault();  // don't follow the Link
+    if (!window.confirm("Are you sure you want to delete this note?")) return;
+    try {
+      await api.delete(`/notes/${id}`);
+      setNotes((prevNotes) => prevNotes.filter((n) => n._id !== id));
+      toast.success("Note deleted successfully");
+    } catch (err) {
+      toast.error("Failed to delete note");
+    }
+  };
+
   return (
-    <Link
-      to={`/note/${note._id}`}
-      className="card bg-base-100 hover:shadow-lg transition-all duration-200
-      border-t-4 border-solid border-[#00FF9D]"
-    >
-      <div className="card-body">
-        <h3 className="card-title text-base-content">{note.title}</h3>
-        <p className="text-base-content/70 line-clamp-3">{note.content}</p>
-        <div className="card-actions justify-between items-center mt-4">
-          <span className="text-sm text-base-content/60">
-            {formatDate(new Date(note.createdAt))}
-          </span>
-          <div className="flex items-center gap-1">
-            <PenSquareIcon className="size-4" />
-            <button
-              className="btn btn-ghost btn-xs text-error"
-              onClick={(e) => handleDelete(e, note._id)}
-            >
-              <Trash2Icon className="size-4" />
-            </button>
-          </div>
-        </div>
-      </div>
+    <Link to={`/notes/${note._id}`} className="card ...">
+      <h3>{note.title}</h3>
+      <p className="line-clamp-3">{note.content}</p>
+      <span>{formatDate(new Date(note.createdAt))}</span>
+      <button onClick={(e) => handleDelete(e, note._id)}>
+        <Trash2Icon />
+      </button>
     </Link>
   );
 };
 ```
 
-**Responsibility:** Display a single note as a clickable card with title, preview of content, creation date, and action buttons.
+**Responsibility:** Display a single note as a clickable card. Clicking the card navigates to the detail page. The delete button removes the note without navigating.
 
-**Props:** Receives `note` from `HomePage` via `<NoteCard note={note} />`. Props flow **downward** (parent → child).
+**`setNotes` prop pattern** — `NoteCard` doesn't own the notes array; `HomePage` does. By passing `setNotes` down, the card can optimistically update the list immediately after a successful delete — without needing to re-fetch all notes from the server.
 
-**`formatDate(new Date(note.createdAt))`** — MongoDB stores `createdAt` as an ISO string (`"2026-04-19T08:00:00.000Z"`). `new Date(...)` converts it to a JavaScript Date object. `formatDate()` (from `lib/utils.js`) then formats it as `"Apr 19, 2026"`.
+**`e.preventDefault()`** — The entire card is a `<Link>`, so clicking the delete button would also trigger navigation. `e.preventDefault()` stops the link behaviour so only the delete API call runs.
 
-**⚠️ Bug:** `handleDelete` is called in `onClick` but is never defined in this component. This will throw a `ReferenceError` at runtime when the delete button is clicked. It needs to be implemented (likely as a prop passed from `HomePage`).
+---
 
-**`to={\`/note/${note._id}\`}`** — Note the route mismatch: the card links to `/note/:id` (singular, no `s`), but `App.jsx` defines the route as `/notes/:id` (plural). This means clicking a card leads to a 404 (no matching route). This is a bug to fix.
+### `NotesNotFound.jsx` — Empty State
+
+```jsx
+const NotesNotFound = () => {
+  return (
+    <div className="flex flex-col items-center justify-center py-16 space-y-6 max-w-md mx-auto text-center">
+      <div className="bg-primary/10 rounded-full p-8">
+        <NotebookIcon className="size-10 text-primary" />
+      </div>
+      <h3 className="text-2xl font-bold">No notes yet</h3>
+      <p className="text-base-content/70">Ready to organize your thoughts? ...</p>
+      <Link to="/create" className="btn btn-primary">Create Your First Note</Link>
+    </div>
+  );
+};
+```
+
+**Responsibility:** A pure presentational component shown in `HomePage` when `notes.length === 0 && !isRateLimited`. It gives users a clear next action instead of a blank page.
 
 ---
 
